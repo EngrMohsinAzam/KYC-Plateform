@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { adminLogin, getAdminToken } from '@/lib/admin-api'
+import { LoadingDots } from '@/components/ui/LoadingDots'
 
 export default function AdminLogin() {
   const router = useRouter()
@@ -122,9 +123,16 @@ export default function AdminLogin() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-black hover:bg-black/80 text-white font-medium py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-black hover:bg-black/80 text-white font-medium py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            {loading ? 'Signing in...' : 'Sign in'}
+            {loading ? (
+              <>
+                <LoadingDots size="sm" color="#ffffff" />
+                <span>Signing in...</span>
+              </>
+            ) : (
+              'Sign in'
+            )}
           </button>
         </form>
 

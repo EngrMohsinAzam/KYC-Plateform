@@ -17,7 +17,7 @@ Create a `.env.local` file in the root directory:
 
 ```env
 NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your_project_id_here
-NEXT_PUBLIC_API_URL=https://f6m9v4gm-3099.asse.devtunnels.ms
+NEXT_PUBLIC_API_URL=https://xzfjrnv9-3099.asse.devtunnels.ms
 ```
 
 ### 3. Backend Endpoint

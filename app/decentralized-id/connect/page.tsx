@@ -223,10 +223,7 @@ export default function ConnectWallet() {
 
           {/* Information Section - Key-Value Pairs */}
           <div className="space-y-4 mb-6 bg-white rounded-xl p-4 md:bg-white">
-            <div className="flex justify-between items-start">
-              <p className="text-base text-text-primary">ID Number</p>
-              <p className="text-base text-text-secondary">{idNumber}</p>
-            </div>
+           
             <div className="flex justify-between items-start">
               <p className="text-base text-text-primary">Estimated gas fee</p>
               <p className="text-base text-text-secondary">{gasFee}</p>

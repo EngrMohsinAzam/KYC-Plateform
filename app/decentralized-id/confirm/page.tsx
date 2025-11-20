@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { Header } from '@/components/layout/Header'
 import { useAppContext } from '@/context/useAppContext'
+import { LoadingDots } from '@/components/ui/LoadingDots'
 import { checkUSDTBalance, submitKYCVerification, isMetaMaskInstalled, getNetworkInfo, connectWallet, checkKYCStatus } from '@/lib/web3'
 import { submitKYCData } from '@/lib/api'
 import { ethers } from 'ethers'
@@ -30,6 +31,7 @@ export default function ConfirmBlockstamp() {
   const [blockchainName, setBlockchainName] = useState<string>('Binance Chain')
   const [loadingTransactionData, setLoadingTransactionData] = useState(false)
   const [connecting, setConnecting] = useState(false)
+  const [transactionStatus, setTransactionStatus] = useState<'idle' | 'processing' | 'success'>('idle')
 
   useEffect(() => {
     // Don't clear wallet - allow it to persist
@@ -207,6 +209,7 @@ export default function ConfirmBlockstamp() {
 
     setLoading(true)
     setError(null)
+    setTransactionStatus('processing')
 
     try {
       // Generate anonymous ID from user's personal info
@@ -220,6 +223,9 @@ export default function ConfirmBlockstamp() {
 
       // Submit KYC verification to smart contract (this will deduct $2 USDT)
       const transactionHash = await submitKYCVerification(anonymousId, metadataUrl)
+      
+      // Show success state
+      setTransactionStatus('success')
 
       // Get transaction receipt for additional details
       const { getProviderAndSigner } = await import('@/lib/web3')
@@ -265,7 +271,7 @@ export default function ConfirmBlockstamp() {
       console.log('========================================')
       console.log('🚀 STARTING BACKEND API SUBMISSION')
       console.log('========================================')
-      console.log('API URL:', process.env.NEXT_PUBLIC_API_URL || 'https://f6m9v4gm-3099.asse.devtunnels.ms')
+      console.log('API URL:', process.env.NEXT_PUBLIC_API_URL || 'https://xzfjrnv9-3099.asse.devtunnels.ms')
       console.log('Submitting KYC data to backend API...')
       console.log('Data being submitted:', {
         userId: anonymousId,
@@ -327,12 +333,16 @@ export default function ConfirmBlockstamp() {
       // Store transaction hash
       localStorage.setItem('kycTransactionHash', transactionHash)
 
+      // Wait a moment to show success animation before navigating
+      await new Promise(resolve => setTimeout(resolve, 1500))
+
       // ONLY navigate to review page AFTER backend confirms submission
       // The review page will show "Under review" status
       router.push('/verify/review')
     } catch (err: any) {
       console.error('Transaction error:', err)
       setError(err.message || 'Transaction failed. Please try again.')
+      setTransactionStatus('idle')
     } finally {
       setLoading(false)
     }
@@ -393,12 +403,7 @@ export default function ConfirmBlockstamp() {
 
             {/* ID Details Section - Always show */}
             <div className="bg-gray-100 rounded-lg p-4 mb-6 space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-700">ID Number</span>
-                <span className="text-sm font-semibold text-gray-900">
-                  {idNumber}
-                </span>
-              </div>
+              
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-700">Estimated gas fee</span>
                 <span className="text-sm font-semibold text-gray-900">
@@ -538,28 +543,61 @@ export default function ConfirmBlockstamp() {
               <Button 
                 onClick={handleConnectWallet}
                 disabled={connecting}
-                className="w-full bg-gray-900 hover:bg-gray-800 text-white rounded-lg py-3 font-medium"
+                className="w-full bg-gray-900 hover:bg-gray-800 text-white rounded-lg py-3 font-medium flex items-center justify-center gap-2"
               >
-                {connecting ? 'Connecting...' : 'Connect wallet'}
+                {connecting ? (
+                  <>
+                    <LoadingDots size="sm" color="#ffffff" />
+                    <span>Connecting...</span>
+                  </>
+                ) : (
+                  'Connect wallet'
+                )}
               </Button>
             </div>
           ) : (
             <div className="fixed md:relative bottom-0 left-0 right-0 p-4 md:p-0 bg-white md:bg-transparent border-t md:border-t-0">
               <Button 
                 onClick={handleConfirm}
-                disabled={loading || checkingBalance || checkingKYC || (usdtBalance !== null && parseFloat(usdtBalance) < 2) || (kycStatus?.isVerified || kycStatus?.hasSubmitted) || !isCorrectNetwork}
-                className="w-full bg-gray-900 hover:bg-gray-800 text-white rounded-lg py-3 font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
+                disabled={loading || checkingBalance || checkingKYC || (usdtBalance !== null && parseFloat(usdtBalance) < 2) || (kycStatus?.isVerified || kycStatus?.hasSubmitted) || !isCorrectNetwork || transactionStatus === 'success'}
+                className={`w-full rounded-lg py-3 font-medium transition-all duration-300 ${
+                  transactionStatus === 'success' 
+                    ? 'bg-green-600 hover:bg-green-600 text-white' 
+                    : transactionStatus === 'processing'
+                    ? 'bg-blue-600 hover:bg-blue-600 text-white'
+                    : 'bg-gray-900 hover:bg-gray-800 text-white'
+                } disabled:bg-gray-400 disabled:cursor-not-allowed relative overflow-hidden`}
               >
-                {loading ? (
+                {transactionStatus === 'success' ? (
                   <span className="flex items-center justify-center gap-2">
-                    <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    <svg 
+                      className="h-5 w-5 animate-checkmark" 
+                      xmlns="http://www.w3.org/2000/svg" 
+                      fill="none" 
+                      viewBox="0 0 24 24" 
+                      stroke="currentColor"
+                      strokeWidth="3"
+                    >
+                      <path 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round" 
+                        d="M5 13l4 4L19 7"
+                        className="animate-draw-check"
+                      />
                     </svg>
-                    Processing transaction...
+                    <span className="animate-fade-in">Transaction Confirmed!</span>
                   </span>
+                ) : loading || transactionStatus === 'processing' ? (
+                  <>
+                    <LoadingDots size="sm" color="#ffffff" />
+                    <span>Processing transaction...</span>
+                  </>
                 ) : (
                   'Confirm blockstamp'
+                )}
+                {/* Animated background effect during processing */}
+                {transactionStatus === 'processing' && (
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 via-blue-400/30 to-blue-500/20 animate-shimmer"></div>
                 )}
               </Button>
             </div>

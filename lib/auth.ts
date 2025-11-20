@@ -13,7 +13,7 @@ export const clearStoredToken = (): void => {
   localStorage.removeItem("kyc_admin_token")
 }
 
-export const API_BASE_URL = "http://localhost:3099"
+export const API_BASE_URL = "https://xzfjrnv9-3099.asse.devtunnels.ms/"
 
 export async function loginAdmin(username: string, password: string) {
   const response = await fetch(`${API_BASE_URL}/api/admin/login`, {

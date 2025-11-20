@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { getAdminToken, getUserDetails, updateUserStatus, User } from '@/lib/admin-api'
 import { XCircleIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
+import { LoadingPage, LoadingDots } from '@/components/ui/LoadingDots'
 import {
   EnvelopeIcon,
   PhoneIcon,
@@ -64,7 +65,19 @@ export default function UserDetailsPage() {
       const result = await getUserDetails(decodedEmail)
 
       if (result.success && result.data) {
-        setUser(result.data)
+        // Ensure kycStatus is set (map from verificationStatus if needed)
+        const userData = { ...result.data }
+        if ((userData as any).verificationStatus && !userData.kycStatus) {
+          userData.kycStatus = (userData as any).verificationStatus as any
+        }
+        
+        console.log('📋 User data received:', {
+          email: userData.email,
+          kycStatus: userData.kycStatus,
+          verificationStatus: (userData as any).verificationStatus,
+          fullUser: userData
+        })
+        setUser(userData)
       } else {
         setError(result.message || 'Failed to load user details')
       }
@@ -89,9 +102,32 @@ export default function UserDetailsPage() {
 
       const result = await updateUserStatus(userEmail, status, reason)
 
+      console.log('🔄 Status update result:', {
+        success: result.success,
+        message: result.message,
+        data: result.data,
+        status: status,
+        reason: reason
+      })
+
       if (result.success) {
-        // Reload user details to get updated status
+        // Update local state immediately with the new status
+        if (result.data && (result.data.kycStatus || (result.data as any).verificationStatus)) {
+          const newStatus = result.data.kycStatus || (result.data as any).verificationStatus
+          setUser({ ...user, kycStatus: newStatus as any })
+          console.log('✅ Updated local user state with new status:', newStatus)
+        } else {
+          // If response doesn't have status, update with the status we just set
+          setUser({ ...user, kycStatus: status as any })
+          console.log('✅ Updated local user state with status from request:', status)
+        }
+        
+        // Wait a moment for backend to process, then reload user details
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        // Reload user details to get updated status from backend
         await loadUserDetails()
+        
         const statusMessage = result.message || `User status updated to ${status}`
         alert(statusMessage)
         setShowRejectModal(false)
@@ -120,14 +156,7 @@ export default function UserDetailsPage() {
   }
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading user details...</p>
-        </div>
-      </div>
-    )
+    return <LoadingPage message="Loading user details..." />
   }
 
   if (error || (!loading && !user)) {
@@ -243,8 +272,17 @@ export default function UserDetailsPage() {
                 disabled={updating}
                   className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 text-xs sm:text-sm md:text-base"
               >
-                  <CheckCircleIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                  <span>Approve</span>
+                  {updating ? (
+                    <>
+                      <LoadingDots size="sm" color="#ffffff" />
+                      <span>Approving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircleIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                      <span>Approve</span>
+                    </>
+                  )}
               </button>
               )}
             </div>
@@ -652,9 +690,16 @@ export default function UserDetailsPage() {
                 <button
                   onClick={handleRejectConfirm}
                   disabled={!rejectionReason || updating}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  {updating ? 'Processing...' : 'Confirm Rejection'}
+                  {updating ? (
+                    <>
+                      <LoadingDots size="sm" color="#ffffff" />
+                      <span>Processing...</span>
+                    </>
+                  ) : (
+                    'Confirm Rejection'
+                  )}
                 </button>
               </div>
             </div>

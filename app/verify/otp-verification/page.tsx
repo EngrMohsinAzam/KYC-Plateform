@@ -8,7 +8,7 @@
 // import { useAppContext } from '@/context/useAppContext'
 
 // // API base URL - update this to your backend URL
-// const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://f6m9v4gm-3099.asse.devtunnels.ms'
+// const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://xzfjrnv9-3099.asse.devtunnels.ms'
 
 // // Send OTP to email
 // const sendOTP = async (email: string): Promise<{ success: boolean; message?: string }> => {
@@ -271,9 +271,10 @@ import { Header } from '@/components/layout/Header'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { useAppContext } from '@/context/useAppContext'
 import { getCountryByValue, getCitiesForCountry } from '@/lib/countries'
+import { LoadingDots } from '@/components/ui/LoadingDots'
 
 // API base URL
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://f6m9v4gm-3099.asse.devtunnels.ms'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://xzfjrnv9-3099.asse.devtunnels.ms'
 
 // Note: Image conversion and submission is now handled in the review page
 
@@ -509,13 +510,18 @@ export default function OTPVerification() {
               <button
                 onClick={handleSendOTP}
                 disabled={sendingOTP || resendTimer > 0 || loading}
-                className="text-sm text-primary hover:underline disabled:text-text-light disabled:no-underline"
+                className="text-sm text-primary hover:underline disabled:text-text-light disabled:no-underline flex items-center gap-2 justify-center"
               >
-                {sendingOTP
-                  ? 'Sending...'
-                  : resendTimer > 0
-                  ? `Resend code in ${resendTimer}s`
-                  : 'Resend code'}
+                {sendingOTP ? (
+                  <>
+                    <LoadingDots size="sm" color="currentColor" />
+                    <span>Sending...</span>
+                  </>
+                ) : resendTimer > 0 ? (
+                  `Resend code in ${resendTimer}s`
+                ) : (
+                  'Resend code'
+                )}
               </button>
             </div>
           </div>
@@ -524,13 +530,13 @@ export default function OTPVerification() {
             <Button
               onClick={handleVerify}
               disabled={loading || otp.join('').length !== 6}
-              className="w-full"
+              className="w-full flex items-center justify-center gap-2"
             >
               {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                  Submitting to backend...
-                </span>
+                <>
+                  <LoadingDots size="sm" color="#ffffff" />
+                  <span>Submitting to backend...</span>
+                </>
               ) : (
                 'Verify & Continue'
               )}

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { Header } from '@/components/layout/Header'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { useAppContext } from '@/context/useAppContext'
+import { LoadingDots } from '@/components/ui/LoadingDots'
 import { useAccount, useConnect } from 'wagmi'
 import { getNetworkInfo, submitKYCVerification, checkUSDTBalance } from '@/lib/web3'
 import { submitKYCData } from '@/lib/api'
@@ -603,12 +604,7 @@ export default function ReviewContent() {
 
               {/* ID Details Section - Always show */}
               <div className="bg-gray-100 rounded-lg p-4 mb-6 space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-700">ID Number</span>
-                  <span className="text-sm font-semibold text-gray-900">
-                    {idNumber}
-                  </span>
-                </div>
+              
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-700">Estimated gas fee</span>
                   <span className="text-sm font-semibold text-gray-900">
@@ -661,11 +657,21 @@ export default function ReviewContent() {
               <Button
                 onClick={handleSubmitKYC}
                 disabled={processingPayment || submittingToBackend || !!networkError}
-                className="w-full bg-gray-900 hover:bg-gray-800 text-white rounded-lg py-3 font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
+                className="w-full bg-gray-900 hover:bg-gray-800 text-white rounded-lg py-3 font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                {processingPayment ? 'Processing transaction...' : 
-                 submittingToBackend ? 'Submitting to Backend...' : 
-                 'Confirm blockstamp'}
+                {processingPayment ? (
+                  <>
+                    <LoadingDots size="sm" color="#ffffff" />
+                    <span>Processing transaction...</span>
+                  </>
+                ) : submittingToBackend ? (
+                  <>
+                    <LoadingDots size="sm" color="#ffffff" />
+                    <span>Submitting to Backend...</span>
+                  </>
+                ) : (
+                  'Confirm blockstamp'
+                )}
               </Button>
             </div>
           )}
@@ -762,11 +768,21 @@ export default function ReviewContent() {
                 <Button
                   onClick={handleSubmitKYC}
                   disabled={processingPayment || submittingToBackend || !!networkError}
-                  className="w-full bg-gray-900 hover:bg-gray-800 text-white rounded-lg py-3 font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  className="w-full bg-gray-900 hover:bg-gray-800 text-white rounded-lg py-3 font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  {processingPayment ? 'Processing transaction...' : 
-                   submittingToBackend ? 'Submitting to Backend...' : 
-                   'Confirm blockstamp'}
+                  {processingPayment ? (
+                    <>
+                      <LoadingDots size="sm" color="#ffffff" />
+                      <span>Processing transaction...</span>
+                    </>
+                  ) : submittingToBackend ? (
+                    <>
+                      <LoadingDots size="sm" color="#ffffff" />
+                      <span>Submitting to Backend...</span>
+                    </>
+                  ) : (
+                    'Confirm blockstamp'
+                  )}
                 </Button>
               )}
             </div>

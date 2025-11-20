@@ -5,7 +5,7 @@ import { useAccount, useDisconnect, useSignMessage } from 'wagmi'
 import { useConnect } from 'wagmi'
 import { Button } from '@/components/ui/Button'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://f6m9v4gm-3099.asse.devtunnels.ms'
+const API_BASE_URL =  'https://xzfjrnv9-3099.asse.devtunnels.ms/'
 
 interface WalletConnectButtonProps {
   onConnect?: (address: string) => void

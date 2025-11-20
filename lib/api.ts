@@ -1,5 +1,5 @@
 // API base URL - update this to your backend URL
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://f6m9v4gm-3099.asse.devtunnels.ms'
+const API_BASE_URL = 'https://xzfjrnv9-3099.asse.devtunnels.ms'
 
 // Convert base64 image to File object
 const base64ToFile = (base64String: string, filename: string): File => {
@@ -161,7 +161,7 @@ export const submitKYCData = async (data: {
     console.log('========================================')
     console.log('🌐 API Configuration:')
     console.log('  - API Base URL:', API_BASE_URL)
-    console.log('  - Full Endpoint:', `${API_BASE_URL}/api/kyc/submit`)
+    console.log('  - Full Endpoint:', `${API_BASE_URL}api/kyc/submit`)
     console.log('  - Request Method: POST')
     console.log('  - Content Type: multipart/form-data (FormData)')
     
@@ -438,6 +438,90 @@ export const checkStatusByWallet = async (walletAddress: string): Promise<{ succ
     return { 
       success: false, 
       message: error.message || 'Failed to check status. Please try again.' 
+    }
+  }
+}
+
+// Update KYC documents (for blur rejection)
+export const updateKYCDocuments = async (data: {
+  email: string
+  idType?: string
+  identityDocumentFront?: string // base64
+  identityDocumentBack?: string // base64
+  liveInImage?: string // base64 - selfie
+  newEmail?: string
+}): Promise<{ success: boolean; message?: string; data?: any }> => {
+  console.log('🔄 updateKYCDocuments FUNCTION CALLED!')
+  console.log('📥 Received data:', {
+    email: data.email,
+    hasFrontImage: !!data.identityDocumentFront,
+    hasBackImage: !!data.identityDocumentBack,
+    hasSelfie: !!data.liveInImage,
+    idType: data.idType,
+    newEmail: data.newEmail
+  })
+  
+  try {
+    const formData = new FormData()
+    
+    // Required field
+    formData.append('email', data.email)
+    
+    // Optional fields
+    if (data.idType) {
+      formData.append('idType', data.idType)
+    }
+    if (data.newEmail) {
+      formData.append('newEmail', data.newEmail)
+    }
+    
+    // Convert base64 images to File objects if provided
+    if (data.identityDocumentFront) {
+      const frontFile = base64ToFile(data.identityDocumentFront, 'identity-document-front.jpg')
+      formData.append('identityDocumentFront', frontFile)
+      console.log('  ✅ Added front document')
+    }
+    
+    if (data.identityDocumentBack) {
+      const backFile = base64ToFile(data.identityDocumentBack, 'identity-document-back.jpg')
+      formData.append('identityDocumentBack', backFile)
+      console.log('  ✅ Added back document')
+    }
+    
+    if (data.liveInImage) {
+      const selfieFile = base64ToFile(data.liveInImage, 'live-in-image.jpg')
+      formData.append('liveInImage', selfieFile)
+      console.log('  ✅ Added selfie image')
+    }
+    
+    const url = `${API_BASE_URL}/api/kyc/update-documents`
+    console.log('  - API URL:', url)
+    console.log('  - Method: PUT')
+    
+    const response = await fetch(url, {
+      method: 'PUT',
+      body: formData,
+    })
+    
+    console.log('  - Response status:', response.status)
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('❌ API Error:', errorText)
+      return {
+        success: false,
+        message: `API error: ${response.status} ${response.statusText}${errorText ? ' - ' + errorText : ''}`
+      }
+    }
+    
+    const result = await response.json()
+    console.log('✅ Update successful:', result)
+    return result
+  } catch (error: any) {
+    console.error('❌ Error updating documents:', error)
+    return {
+      success: false,
+      message: error.message || 'Failed to update documents. Please try again.'
     }
   }
 }

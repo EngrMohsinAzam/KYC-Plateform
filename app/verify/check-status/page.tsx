@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Header } from '@/components/layout/Header'
 import { checkStatusByEmail } from '@/lib/api'
+import { LoadingDots } from '@/components/ui/LoadingDots'
 
 // Validate email format
 const validateEmail = (email: string): boolean => {
@@ -59,10 +60,10 @@ export default function CheckStatus() {
           setTimeout(() => {
             router.push('/verify/review')
           }, 2000)
-        } else if (result.data.verificationStatus === 'cancelled') {
-          // Show cancelled screen
+        } else if (result.data.verificationStatus === 'cancelled' || result.data.verificationStatus === 'rejected') {
+          // Show rejected screen with email parameter
           setTimeout(() => {
-            router.push('/verify/rejected')
+            router.push(`/verify/rejected?email=${encodeURIComponent(email)}`)
           }, 2000)
         } else if (result.data.verificationStatus === 'not_found') {
           // Show verification start screen
@@ -148,9 +149,16 @@ export default function CheckStatus() {
             <Button
               onClick={handleCheckStatus}
               disabled={loading || !email}
-              className="w-full bg-black hover:bg-black/80 text-white font-semibold rounded-full py-3"
+              className="w-full bg-black hover:bg-black/80 text-white font-semibold rounded-full py-3 flex items-center justify-center gap-2"
             >
-              {loading ? 'Checking...' : 'Check Status'}
+              {loading ? (
+                <>
+                  <LoadingDots size="sm" color="#ffffff" />
+                  <span>Checking...</span>
+                </>
+              ) : (
+                'Check Status'
+              )}
             </Button>
           </div>
         </div>

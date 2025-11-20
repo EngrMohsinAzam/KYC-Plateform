@@ -1,5 +1,5 @@
 // Admin API utilities
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://f6m9v4gm-3099.asse.devtunnels.ms'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://xzfjrnv9-3099.asse.devtunnels.ms'
 
 // Get admin token from localStorage
 export const getAdminToken = (): string | null => {
@@ -304,6 +304,24 @@ export const getUserDetails = async (email: string): Promise<{ success: boolean;
     }
 
     const data = await response.json()
+    
+    // Log the response to debug status field
+    console.log('📥 User details API response:', {
+      success: data.success,
+      hasData: !!data.data,
+      kycStatus: data.data?.kycStatus,
+      verificationStatus: data.data?.verificationStatus,
+      fullData: data.data
+    })
+    
+    // Map verificationStatus to kycStatus if needed (backend might use different field name)
+    if (data.success && data.data) {
+      if (data.data.verificationStatus && !data.data.kycStatus) {
+        data.data.kycStatus = data.data.verificationStatus
+        console.log('✅ Mapped verificationStatus to kycStatus:', data.data.kycStatus)
+      }
+    }
+    
     return data
   } catch (error: any) {
     console.error('Get user details error:', error)
@@ -333,9 +351,17 @@ export const updateUserStatus = async (
     }
 
     const requestBody: { email: string; status: string; reason?: string } = { email, status }
-    if (status === 'rejected' && reason) {
+    // Always send reason if provided (for rejected, cancelled, or any status that needs a reason)
+    if (reason) {
       requestBody.reason = reason
     }
+
+    console.log('📤 Updating user status:', {
+      email,
+      status,
+      reason: reason || 'No reason provided',
+      requestBody
+    })
 
     const response = await fetch(`${API_BASE_URL}/api/admin/users/status-by-email`, {
       method: 'PATCH',
@@ -357,6 +383,13 @@ export const updateUserStatus = async (
     }
 
     const data = await response.json()
+    
+    console.log('✅ Status update API response:', {
+      success: data.success,
+      message: data.message,
+      data: data.data
+    })
+    
     return data
   } catch (error: any) {
     console.error('Update user status error:', error)

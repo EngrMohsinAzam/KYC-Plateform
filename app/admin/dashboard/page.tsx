@@ -10,6 +10,7 @@ import { useAccount, useConnect } from 'wagmi'
 import { getContractBalance, getTotalWithdrawals, verifyOwner, withdrawContractFunds } from '@/lib/web3'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts'
 import Link from 'next/link'
+import { LoadingPage } from '@/components/ui/LoadingDots'
 
 export default function AdminDashboard() {
   const router = useRouter()
@@ -470,37 +471,16 @@ export default function AdminDashboard() {
   // Show loading or redirect if not authenticated
   if (isAuthenticated === null) {
     // Still checking authentication
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Checking authentication...</p>
-        </div>
-      </div>
-    )
+    return <LoadingPage message="Checking authentication..." />
   }
 
   if (isAuthenticated === false) {
     // Not authenticated - redirecting (or show redirecting message)
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Redirecting to login...</p>
-        </div>
-      </div>
-    )
+    return <LoadingPage message="Redirecting to login..." />
   }
 
   if (loading && !stats) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading dashboard...</p>
-        </div>
-      </div>
-    )
+    return <LoadingPage message="Loading dashboard..." />
   }
 
   return (

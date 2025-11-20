@@ -309,7 +309,14 @@ export async function checkContractExists(address: string): Promise<boolean> {
   }
 }
 
-export async function checkUSDTBalance(address: string): Promise<string> {
+// Helper function to detect mobile devices
+function isMobileDevice(): boolean {
+  if (typeof window === 'undefined') return false
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+}
+
+// Get raw USDT balance as BigInt (for accurate comparison)
+export async function getUSDTBalanceRaw(address: string): Promise<{ balance: bigint; decimals: number }> {
   try {
     const { provider } = await getProviderAndSigner()
     
@@ -324,16 +331,20 @@ export async function checkUSDTBalance(address: string): Promise<string> {
     
     const usdtContract = new ethers.Contract(CONTRACT_ADDRESSES.USDT, USDT_ABI, provider)
     
-    let decimals = 18
+    // Force fresh balance fetch (not cached) - especially important for mobile
+    let decimals = 6 // USDT uses 6 decimals
     try {
       decimals = await usdtContract.decimals()
     } catch (err) {
-      console.warn('Could not get decimals from contract, using default 18')
-      decimals = 18
+      console.warn('Could not get decimals from contract, using default 6 for USDT')
+      decimals = 6
     }
     
+    // Get raw balance directly from contract (not cached)
     const balance = await usdtContract.balanceOf(address)
-    return ethers.formatUnits(balance, decimals)
+    console.log('💰 Raw USDT balance from contract:', balance.toString(), `(${ethers.formatUnits(balance, decimals)} USDT)`)
+    
+    return { balance, decimals }
   } catch (error: any) {
     if (error.message.includes('not found') || error.message.includes('BAD_DATA') || error.message.includes('contract not found')) {
       const network = await getNetworkInfo()
@@ -343,6 +354,15 @@ export async function checkUSDTBalance(address: string): Promise<string> {
         `Contract address: ${CONTRACT_ADDRESSES.USDT}`
       )
     }
+    throw error
+  }
+}
+
+export async function checkUSDTBalance(address: string): Promise<string> {
+  try {
+    const { balance, decimals } = await getUSDTBalanceRaw(address)
+    return ethers.formatUnits(balance, decimals)
+  } catch (error: any) {
     throw error
   }
 }
@@ -375,28 +395,59 @@ export async function approveUSDT(amount: string): Promise<string> {
       throw new Error('Insufficient BNB for gas fees. You need at least 0.001 BNB to pay for transaction fees.')
     }
     
-    // MOBILE FIX: Manually estimate gas and set parameters
-    let gasLimit: bigint
-    let gasPrice: bigint
+    // ✅ FIX 3: Gas estimation with retry logic for approval
+    const isMobileApproval = isMobileDevice()
+    let gasLimit: bigint = BigInt(0)
+    let gasPrice: bigint = BigInt(0)
+    let estimationSuccess = false
+    let attempts = 0
+    const maxAttempts = 3
     
-    try {
-      // Get fee data first
-      const feeData = await provider.getFeeData()
-      gasPrice = feeData.gasPrice || BigInt(5000000000) // 5 gwei fallback
-      console.log('  - Gas Price:', ethers.formatUnits(gasPrice, 'gwei'), 'gwei')
-      
-      // Try to estimate gas
-      gasLimit = await usdtContract.approve.estimateGas(CONTRACT_ADDRESSES.KYC, amountInWei)
-      // Add 30% buffer for mobile wallets (they need more)
-      gasLimit = (gasLimit * BigInt(130)) / BigInt(100)
-      console.log('  - Estimated Gas Limit (with buffer):', gasLimit.toString())
-    } catch (gasError: any) {
-      console.warn('  ⚠️ Gas estimation failed:', gasError.message)
-      // Fallback: Use safe fixed values for mobile
-      gasLimit = BigInt(100000) // Safe default for approve on mobile
+    console.log(`  ⛽ Estimating gas for approval (${isMobileApproval ? 'Mobile' : 'Desktop'} device)...`)
+    
+    while (attempts < maxAttempts && !estimationSuccess) {
+      try {
+        // Get fee data first
+        const feeData = await provider.getFeeData()
+        gasPrice = feeData.gasPrice || BigInt(5000000000) // 5 gwei fallback
+        console.log(`  - Attempt ${attempts + 1}/${maxAttempts}: Gas Price: ${ethers.formatUnits(gasPrice, 'gwei')} gwei`)
+        
+        // Try to estimate gas
+        gasLimit = await usdtContract.approve.estimateGas(CONTRACT_ADDRESSES.KYC, amountInWei)
+        console.log(`  - Estimated Gas Limit (raw): ${gasLimit.toString()}`)
+        
+        // Use higher buffer for mobile (50%) vs desktop (30%)
+        const buffer = isMobileApproval ? 150 : 130
+        gasLimit = (gasLimit * BigInt(buffer)) / BigInt(100)
+        console.log(`  - Gas Limit (with ${buffer}% buffer): ${gasLimit.toString()}`)
+        
+        estimationSuccess = true
+        console.log('  ✅ Gas estimation successful!')
+      } catch (gasError: any) {
+        attempts++
+        console.warn(`  ⚠️ Gas estimation attempt ${attempts} failed:`, gasError.message)
+        
+        if (attempts < maxAttempts) {
+          console.log(`  ⏳ Retrying in 1 second...`)
+          await new Promise(resolve => setTimeout(resolve, 1000))
+        }
+      }
+    }
+    
+    // Use safe fallback if estimation fails
+    if (!estimationSuccess) {
+      console.warn('  ⚠️ Gas estimation failed after all attempts, using safe fallback values')
+      gasLimit = BigInt(isMobileApproval ? 150000 : 100000) // Higher for mobile
       gasPrice = BigInt(5000000000) // 5 gwei
-      console.log('  - Using fallback gas limit:', gasLimit.toString())
-      console.log('  - Using fallback gas price:', ethers.formatUnits(gasPrice, 'gwei'), 'gwei')
+      console.log(`  - Fallback Gas Limit: ${gasLimit.toString()} (${isMobileApproval ? 'mobile' : 'desktop'} default)`)
+      console.log(`  - Fallback Gas Price: ${ethers.formatUnits(gasPrice, 'gwei')} gwei`)
+    }
+    
+    // Ensure gasLimit and gasPrice are always set
+    if (gasLimit === BigInt(0) || gasPrice === BigInt(0)) {
+      gasLimit = BigInt(isMobileApproval ? 150000 : 100000)
+      gasPrice = BigInt(5000000000)
+      console.warn('  ⚠️ Using emergency fallback gas values')
     }
     
     // Calculate total gas cost
@@ -429,6 +480,53 @@ export async function approveUSDT(amount: string): Promise<string> {
     console.log('✅ Approval confirmed!')
     console.log('  - Block:', receipt.blockNumber)
     console.log('  - Gas Used:', receipt.gasUsed.toString())
+    
+    // ✅ MOBILE FIX: Wait for approval to propagate on mobile wallets
+    const isMobileApprovalWait = isMobileDevice()
+    if (isMobileApprovalWait) {
+      console.log('📱 Mobile device detected - waiting for approval to propagate...')
+      await new Promise(resolve => setTimeout(resolve, 3000)) // 3 seconds for mobile
+    }
+    
+    // ✅ MOBILE FIX: Verify approval actually went through
+    console.log('🔍 Verifying approval was successful...')
+    let verificationAttempts = 0
+    let approvalVerified = false
+    
+    while (verificationAttempts < 5 && !approvalVerified) {
+      try {
+        const newAllowance = await usdtContract.allowance(userAddress, CONTRACT_ADDRESSES.KYC)
+        // Get decimals for formatting
+        let allowanceDecimals = 6
+        try {
+          allowanceDecimals = await usdtContract.decimals()
+        } catch {
+          // Use default
+        }
+        console.log(`  - Attempt ${verificationAttempts + 1}: Current allowance: ${ethers.formatUnits(newAllowance, allowanceDecimals)} USDT`)
+        
+        if (newAllowance >= amountInWei) {
+          approvalVerified = true
+          console.log('✅ Approval verified successfully!')
+        } else {
+          verificationAttempts++
+          if (verificationAttempts < 5) {
+            console.log(`  ⏳ Approval not yet propagated, waiting 1 second... (attempt ${verificationAttempts + 1}/5)`)
+            await new Promise(resolve => setTimeout(resolve, 1000))
+          }
+        }
+      } catch (verifyError) {
+        console.warn('  ⚠️ Error verifying approval:', verifyError)
+        verificationAttempts++
+        if (verificationAttempts < 5) {
+          await new Promise(resolve => setTimeout(resolve, 1000))
+        }
+      }
+    }
+    
+    if (!approvalVerified) {
+      throw new Error('Approval transaction confirmed but allowance not updated. Please try again or wait a moment and refresh.')
+    }
     
     return tx.hash
   } catch (error: any) {
@@ -610,13 +708,19 @@ export async function submitKYCVerification(anonymousId: string, metadataUrl: st
     console.log('  - Fee Amount:', CHARGE_AMOUNT, 'USDT')
     console.log('  - Amount in Wei:', amountInWei.toString())
 
-    // Check BNB balance
+    // ✅ FIX 4: Check BNB balance FIRST (before checking USDT)
     const bnbBalance = await provider.getBalance(userAddress)
+    const minBnb = ethers.parseEther('0.002')
     console.log('  - BNB Balance:', ethers.formatEther(bnbBalance), 'BNB')
+    console.log('  - Minimum Required BNB:', ethers.formatEther(minBnb), 'BNB')
     
-    if (bnbBalance < ethers.parseEther('0.002')) {
-      throw new Error('Insufficient BNB for gas fees. You need at least 0.002 BNB. Please add more BNB to your wallet.')
+    if (bnbBalance < minBnb) {
+      throw new Error(
+        `Insufficient BNB for gas fees. You need at least ${ethers.formatEther(minBnb)} BNB. ` +
+        `Current balance: ${ethers.formatEther(bnbBalance)} BNB. Please add more BNB to your wallet.`
+      )
     }
+    console.log('✅ BNB balance check passed')
 
     console.log('\n📝 Checking USDT Approval...')
     const isApproved = await checkUSDTApproval(userAddress)
@@ -626,6 +730,13 @@ export async function submitKYCVerification(anonymousId: string, metadataUrl: st
       console.log('\n🔐 Approving USDT spending...')
       const approveTx = await approveUSDT(CHARGE_AMOUNT)
       console.log('✅ USDT approved successfully!')
+      
+      // Additional wait for mobile after approval verification
+      const isMobileAfterApproval = isMobileDevice()
+      if (isMobileAfterApproval) {
+        console.log('📱 Additional mobile propagation wait...')
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      }
     }
 
     console.log('\n🔍 Checking Contract Status...')
@@ -650,34 +761,84 @@ export async function submitKYCVerification(anonymousId: string, metadataUrl: st
       throw new Error('You have already submitted KYC. Use updateDocuments to update your information.')
     }
 
+    // ✅ FIX 1: Check USDT balance using BigInt comparison (not float)
     console.log('\n💰 Checking USDT Balance BEFORE Submission...')
-    const balanceBefore = await checkUSDTBalance(userAddress)
-    console.log('  - USDT Balance Before:', balanceBefore, 'USDT')
+    const { balance: balanceRaw, decimals: usdtDecimals } = await getUSDTBalanceRaw(userAddress)
+    const requiredAmount = ethers.parseUnits(CHARGE_AMOUNT, usdtDecimals)
+    const balanceFormatted = ethers.formatUnits(balanceRaw, usdtDecimals)
     
-    if (parseFloat(balanceBefore) < 2) {
-      console.error('❌ Insufficient balance:', balanceBefore)
-      throw new Error(`Insufficient USDT balance. You need at least $2 USDT to proceed. Current balance: ${balanceBefore} USDT`)
+    console.log('  - USDT Balance (raw):', balanceRaw.toString())
+    console.log('  - USDT Balance (formatted):', balanceFormatted, 'USDT')
+    console.log('  - Required Amount (raw):', requiredAmount.toString())
+    console.log('  - Required Amount (formatted):', CHARGE_AMOUNT, 'USDT')
+    console.log('  - USDT Decimals:', usdtDecimals)
+    
+    // Compare BigInt directly (accurate comparison)
+    if (balanceRaw < requiredAmount) {
+      console.error('❌ Insufficient balance:', {
+        balanceRaw: balanceRaw.toString(),
+        requiredAmount: requiredAmount.toString(),
+        balanceFormatted,
+        requiredFormatted: CHARGE_AMOUNT
+      })
+      throw new Error(
+        `Insufficient USDT balance. You need at least ${CHARGE_AMOUNT} USDT to proceed. ` +
+        `Current balance: ${balanceFormatted} USDT`
+      )
     }
-    console.log('✅ Balance check passed')
+    console.log('✅ USDT balance check passed (BigInt comparison)')
+    
+    // Store balance for after-check
+    const balanceBefore = balanceFormatted
 
     console.log('\n📤 Submitting KYC to Smart Contract...')
     const metadataUrlToUse = metadataUrl || `https://kyx-platform.com/kyc/${userAddress}`
     
-    // MOBILE FIX: Manually estimate gas for KYC submission
-    let gasLimit: bigint
-    let gasPrice: bigint
+    // ✅ FIX 3: Gas estimation with retry logic and mobile-specific handling
+    const isMobileSubmit = isMobileDevice()
+    // Initialize with fallback values
+    let gasLimit: bigint = BigInt(isMobileSubmit ? 400000 : 350000)
+    let gasPrice: bigint = BigInt(5000000000)
+    let estimationSuccess = false
+    let attempts = 0
+    const maxAttempts = 3
     
-    try {
-      const feeData = await provider.getFeeData()
-      gasPrice = feeData.gasPrice || BigInt(5000000000)
-      
-      gasLimit = await kycContract.submitKYC.estimateGas(combinedDataHash, metadataUrlToUse)
-      // Add 30% buffer
-      gasLimit = (gasLimit * BigInt(130)) / BigInt(100)
-    } catch (gasError) {
-      console.warn('Gas estimation failed, using safe defaults')
-      gasLimit = BigInt(300000) // Safe default for submitKYC
-      gasPrice = BigInt(5000000000)
+    console.log(`\n⛽ Estimating gas (${isMobileSubmit ? 'Mobile' : 'Desktop'} device)...`)
+    
+    while (attempts < maxAttempts && !estimationSuccess) {
+      try {
+        const feeData = await provider.getFeeData()
+        gasPrice = feeData.gasPrice || BigInt(5000000000)
+        console.log(`  - Attempt ${attempts + 1}/${maxAttempts}: Gas Price: ${ethers.formatUnits(gasPrice, 'gwei')} gwei`)
+        
+        const estimatedGas = await kycContract.submitKYC.estimateGas(combinedDataHash, metadataUrlToUse)
+        console.log(`  - Estimated Gas Limit (raw): ${estimatedGas.toString()}`)
+        
+        // Use higher buffer for mobile (50%) vs desktop (30%)
+        const buffer = isMobileSubmit ? 150 : 130
+        gasLimit = (estimatedGas * BigInt(buffer)) / BigInt(100)
+        console.log(`  - Gas Limit (with ${buffer}% buffer): ${gasLimit.toString()}`)
+        
+        estimationSuccess = true
+        console.log('✅ Gas estimation successful!')
+      } catch (gasError: any) {
+        attempts++
+        console.warn(`  ⚠️ Gas estimation attempt ${attempts} failed:`, gasError.message)
+        
+        if (attempts < maxAttempts) {
+          console.log(`  ⏳ Retrying in 1 second...`)
+          await new Promise(resolve => setTimeout(resolve, 1000))
+        }
+      }
+    }
+    
+    // Use safe fallback if estimation failed
+    if (!estimationSuccess) {
+      console.warn('⚠️ Gas estimation failed after all attempts, using safe fallback values')
+      gasLimit = BigInt(isMobileSubmit ? 400000 : 350000) // Higher for mobile
+      gasPrice = BigInt(5000000000) // 5 gwei
+      console.log(`  - Fallback Gas Limit: ${gasLimit.toString()} (${isMobileSubmit ? 'mobile' : 'desktop'} default)`)
+      console.log(`  - Fallback Gas Price: ${ethers.formatUnits(gasPrice, 'gwei')} gwei`)
     }
     
     console.log('📋 Transaction Parameters:')
